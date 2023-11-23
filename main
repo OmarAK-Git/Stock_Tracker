@@ -1,0 +1,55 @@
+import requests
+from datetime import datetime, timedelta
+from twilio.rest import Client
+
+STOCK = "TSLA"
+COMPANY_NAME = "Tesla"
+API_Alpha = "#"
+API_News = "#"
+account_sid = "#"
+auth_token = "#"
+client = Client(account_sid, auth_token)
+
+x = {"function": "TIME_SERIES_DAILY",
+     "symbol": STOCK,
+     "apikey": API_Alpha}
+y = {"apiKey" : API_News,
+     "category" : "business",
+     "q": COMPANY_NAME,
+     "language": "en"}
+
+time = datetime.now()
+if time.weekday() == 0:
+    yesterday = time - timedelta(days=3)
+else:
+    yesterday = time - timedelta(days=1)
+if time.weekday() == 1:
+    before_yesterday = yesterday - timedelta(days=3)
+else:
+    before_yesterday = yesterday - timedelta(days=1)
+
+yesterday = yesterday.strftime("%Y-%m-%d")
+before_yesterday = before_yesterday.strftime("%Y-%m-%d")
+
+response = requests.get("https://www.alphavantage.co/query", params=x)
+response.raise_for_status()
+data = response.json()
+data_close = data["Time Series (Daily)"][yesterday]["4. close"]
+data_close_before = data["Time Series (Daily)"][before_yesterday]["4. close"]
+change = (data_close - data_close_before)/data_close_before*100
+
+if abs(change) >= 5:
+    response = requests.get("https://newsapi.org/v2/top-headlines", params=y)
+    response.raise_for_status()
+    data_news = response.json()
+    data_sliced = data_news["articles"][0:3]
+    for data_slice in data_sliced:
+        title = data_slice["title"]
+        description = data_slice["description"]
+        message = client.messages \
+                    .create(
+                         body=f"{STOCK}: %{change}\nHeadline: {title}\nBrief:{description}",
+                         from_='#',
+                         to='#'
+                     )
+        print(message.status)
